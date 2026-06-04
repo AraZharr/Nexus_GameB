@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@headlessui/vue": "^1.7.16",
+    "@supabase/supabase-js": "^2.107.0",
     "ag-grid-community": "^32.0.0",
     "ag-grid-vue3": "^32.0.0",
     "chart.js": "^4.4.1",
