@@ -97,63 +97,93 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useRBAC } from '@/composables/useRBAC'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
+const rbac = useRBAC()
 const isCollapsed = ref(false)
 
-const menuItems = [
+const allMenuItems = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     path: '/admin',
-    icon: 'DashboardIcon'
+    icon: 'DashboardIcon',
+    minLevel: 2,
   },
   {
     id: 'users',
-    label: 'Users',
+    label: 'Users & Roles',
     path: '/admin/users',
-    icon: 'UsersIcon'
+    icon: 'UsersIcon',
+    minLevel: 2,
   },
   {
     id: 'rooms',
     label: 'Rooms',
     path: '/admin/rooms',
-    icon: 'RoomsIcon'
+    icon: 'RoomsIcon',
+    minLevel: 2,
   },
   {
     id: 'matches',
     label: 'Matches',
     path: '/admin/matches',
-    icon: 'MatchesIcon'
+    icon: 'MatchesIcon',
+    minLevel: 2,
   },
   {
     id: 'leaderboard',
     label: 'Leaderboard',
     path: '/admin/leaderboard',
-    icon: 'LeaderboardIcon'
+    icon: 'LeaderboardIcon',
+    minLevel: 2,
   },
   {
     id: 'economy',
     label: 'Economy',
     path: '/admin/economy',
-    icon: 'EconomyIcon'
+    icon: 'EconomyIcon',
+    minLevel: 3,
   },
   {
     id: 'shop',
     label: 'Shop',
     path: '/admin/shop',
-    icon: 'ShopIcon'
+    icon: 'ShopIcon',
+    minLevel: 3,
   },
   {
     id: 'moderation',
     label: 'Moderation',
     path: '/admin/moderation',
-    icon: 'ModerationIcon'
-  }
+    icon: 'ModerationIcon',
+    minLevel: 2,
+  },
+  {
+    id: 'ads',
+    label: 'Ads',
+    path: '/admin/ads',
+    icon: 'AdsIcon',
+    minLevel: 3,
+  },
+  {
+    id: 'broadcast',
+    label: 'Broadcast',
+    path: '/admin/broadcast',
+    icon: 'BroadcastIcon',
+    minLevel: 3,
+  },
 ]
+
+const menuItems = computed(() => {
+  return allMenuItems.filter((item) => rbac.currentLevel.value >= item.minLevel)
+})
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
@@ -163,8 +193,8 @@ const isActive = (path) => {
   return route.path === path
 }
 
-const handleLogout = () => {
-  // Emit event or handle logout through store
+const handleLogout = async () => {
+  await authStore.logout()
   router.push('/login')
 }
 
@@ -214,6 +244,19 @@ const ShopIcon = {
 const ModerationIcon = {
   template: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4v2m0 5v.01M6.172 5.172a4 4 0 015.656 0L12 6.343l.172-.171a4 4 0 00-5.656 0M12 3a9 9 0 110 18 9 9 0 010-18z"></path>
+  </svg>`
+}
+
+const AdsIcon = {
+  template: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path>
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path>
+  </svg>`
+}
+
+const BroadcastIcon = {
+  template: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.961 1.961 0 01-2.437-1.971V5.882m0 0V5c0-1.657.895-3 2-3s2 1.343 2 3v.882m0 0A1.96 1.96 0 0112 5c0-1.657.895-3 2-3s2 1.343 2 3m0 0V5.882"></path>
   </svg>`
 }
 </script>

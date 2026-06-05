@@ -15,6 +15,7 @@ const FriendsView = () => import('@/views/FriendsView.vue')
 const ChatView = () => import('@/views/ChatView.vue')
 const TermsView = () => import('@/views/TermsView.vue')
 const PrivacyView = () => import('@/views/PrivacyView.vue')
+const BootstrapView = () => import('@/views/BootstrapView.vue')
 
 // Admin Views (lazy loaded)
 const AdminDashboard = () => import('@/views/admin/AdminDashboard.vue')
@@ -35,6 +36,7 @@ const routes = [
   { path: '/register', component: RegisterView, name: 'register' },
   { path: '/terms', component: TermsView, name: 'terms' },
   { path: '/privacy', component: PrivacyView, name: 'privacy' },
+  { path: '/bootstrap', component: BootstrapView, name: 'bootstrap' },
   {
     path: '/dashboard',
     component: DashboardView,

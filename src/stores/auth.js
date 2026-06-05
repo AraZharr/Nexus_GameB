@@ -8,7 +8,16 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoading = ref(true)
   const isLoggedIn = computed(() => !!session.value)
   const isGuest = computed(() => session.value?.user?.is_anonymous ?? false)
-  const isAdmin = computed(() => user.value?.role === 'owner' || user.value?.role === 'gamemaster')
+  const isAdmin = computed(() => {
+    const role = user.value?.role
+    return role === 'owner' || role === 'admin' || role === 'moderator'
+  })
+  const isOwner = computed(() => user.value?.role === 'owner')
+  const isAtLeastAdmin = computed(() => user.value?.role === 'owner' || user.value?.role === 'admin')
+  const roleLevel = computed(() => {
+    const levels = { owner: 4, admin: 3, moderator: 2, user: 1 }
+    return levels[user.value?.role] || 0
+  })
 
   // Initialize auth state from Supabase
   const initialize = async () => {
@@ -109,7 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
           id: authData.user.id,
           email,
           display_name: displayName,
-          role: 'member',
+          role: 'user',
           accepted_terms: false,
           created_at: new Date().toISOString()
         }
@@ -168,7 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
           {
             id: data.user.id,
             display_name: `Guest_${Math.random().toString(36).substr(2, 9)}`,
-            role: 'member',
+            role: 'user',
             accepted_terms: true,
             created_at: new Date().toISOString()
           }
@@ -235,6 +244,9 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     isGuest,
     isAdmin,
+    isOwner,
+    isAtLeastAdmin,
+    roleLevel,
     // Methods
     initialize,
     login,
