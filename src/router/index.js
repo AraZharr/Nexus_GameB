@@ -48,9 +48,15 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/room/:id',
+    path: '/room',
     component: RoomView,
     name: 'room',
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/room/:id',
+    component: RoomView,
+    name: 'roomDetail',
     meta: { requiresAuth: true }
   },
   {

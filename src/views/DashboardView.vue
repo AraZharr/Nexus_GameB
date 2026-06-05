@@ -166,10 +166,10 @@
     </div>
 
     <!-- Footer Navigation -->
-    <div class="bg-slate-900 border-t border-slate-700 p-4 grid grid-cols-4 gap-2 text-xs text-center">
+    <div class="bg-slate-900 border-t border-slate-700 p-4 grid grid-cols-5 gap-1 text-xs text-center">
       <router-link
         to="/dashboard"
-        class="py-2 px-1 rounded-lg hover:bg-slate-800 transition font-semibold text-purple-400"
+        class="py-2 px-1 rounded-lg hover:bg-slate-800 transition font-semibold text-primary-400"
       >
         Home
       </router-link>
@@ -183,7 +183,7 @@
         to="/leaderboard"
         class="py-2 px-1 rounded-lg hover:bg-slate-800 transition font-semibold"
       >
-        Leaderboard
+        Rank
       </router-link>
       <router-link
         to="/profile"
@@ -191,16 +191,34 @@
       >
         Profile
       </router-link>
+      <router-link
+        v-if="isAdmin"
+        to="/admin"
+        class="py-2 px-1 rounded-lg hover:bg-slate-800 transition font-semibold text-red-400"
+      >
+        Admin
+      </router-link>
+      <router-link
+        v-else
+        to="/shop"
+        class="py-2 px-1 rounded-lg hover:bg-slate-800 transition font-semibold text-yellow-400"
+      >
+        Shop
+      </router-link>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { supabase } from '@/lib/supabase';
 import { useEconomyStore } from '@/stores/economy';
+import { useAuthStore } from '@/stores/auth';
 
 const economyStore = useEconomyStore();
+const authStore = useAuthStore();
+
+const isAdmin = computed(() => authStore.isAdmin);
 
 const displayName = ref('Player');
 const userBalance = ref({ koin: 0, diamond: 0 });
@@ -225,7 +243,7 @@ const claimDailyReward = async () => {
     if (!user) return;
 
     // Add to economy
-    await economyStore.addCurrency(user.id, 'koin', 50, 'daily_login');
+    await economyStore.addKoin(50, 'daily_login');
 
     dailyClaimedToday.value = true;
     userBalance.value.koin += 50;
@@ -242,15 +260,15 @@ onMounted(async () => {
     // Fetch user data
     const { data: userData } = await supabase
       .from('users')
-      .select('username, koin_balance, diamond_balance')
+      .select('display_name, koin, diamond')
       .eq('id', user.id)
       .single();
 
     if (userData) {
-      displayName.value = userData.username || 'Player';
+      displayName.value = userData.display_name || 'Player';
       userBalance.value = {
-        koin: userData.koin_balance || 0,
-        diamond: userData.diamond_balance || 0,
+        koin: userData.koin || 0,
+        diamond: userData.diamond || 0,
       };
     }
 

@@ -8,7 +8,21 @@
         Play Chess, Ludo & Snakes with friends online!
       </p>
 
-      <div class="space-y-3">
+      <!-- If logged in, show dashboard -->
+      <div v-if="authStore.isLoggedIn" class="space-y-3">
+        <router-link to="/dashboard">
+          <Button class="w-full">Go to Dashboard</Button>
+        </router-link>
+        <router-link to="/game/chess">
+          <Button variant="ghost" class="w-full">Play Offline</Button>
+        </router-link>
+        <router-link v-if="authStore.isAdmin" to="/admin">
+          <Button variant="danger" class="w-full">Admin Panel</Button>
+        </router-link>
+      </div>
+
+      <!-- If not logged in -->
+      <div v-else class="space-y-3">
         <router-link to="/login">
           <Button class="w-full">Sign In</Button>
         </router-link>
@@ -30,5 +44,8 @@
 </template>
 
 <script setup>
+import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
+
+const authStore = useAuthStore()
 </script>

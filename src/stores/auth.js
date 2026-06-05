@@ -7,8 +7,8 @@ export const useAuthStore = defineStore('auth', () => {
   const session = ref(null)
   const isLoading = ref(true)
   const isLoggedIn = computed(() => !!session.value)
-  const isGuest = computed(() => user.value?.is_guest ?? false)
-  const isAdmin = computed(() => user.value?.role === 'admin' || user.value?.role === 'moderator')
+  const isGuest = computed(() => session.value?.user?.is_anonymous ?? false)
+  const isAdmin = computed(() => user.value?.role === 'owner' || user.value?.role === 'gamemaster')
 
   // Initialize auth state from Supabase
   const initialize = async () => {
@@ -109,8 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
           id: authData.user.id,
           email,
           display_name: displayName,
-          role: 'user',
-          is_guest: false,
+          role: 'member',
           accepted_terms: false,
           created_at: new Date().toISOString()
         }
@@ -169,8 +168,7 @@ export const useAuthStore = defineStore('auth', () => {
           {
             id: data.user.id,
             display_name: `Guest_${Math.random().toString(36).substr(2, 9)}`,
-            role: 'user',
-            is_guest: true,
+            role: 'member',
             accepted_terms: true,
             created_at: new Date().toISOString()
           }

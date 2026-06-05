@@ -61,21 +61,17 @@ export const useEconomyStore = defineStore('economy', () => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('koin_balance, diamond_balance, total_koin_earned, total_diamond_purchased, daily_login_streak, last_login_date, daily_quests, achievements')
+        .select('koin, diamond, total_koin_earned, total_diamond_purchased')
         .eq('id', uid)
         .single()
 
       if (error) throw error
 
       if (data) {
-        koin.value = data.koin_balance || 0
-        diamond.value = data.diamond_balance || 0
+        koin.value = data.koin || 0
+        diamond.value = data.diamond || 0
         totalKoinEarned.value = data.total_koin_earned || 0
         totalDiamondPurchased.value = data.total_diamond_purchased || 0
-        dailyLoginStreak.value = data.daily_login_streak || 0
-        lastLoginDate.value = data.last_login_date || null
-        dailyQuests.value = data.daily_quests || []
-        achievements.value = data.achievements || []
       }
 
       checkAndResetDaily()
@@ -112,7 +108,7 @@ export const useEconomyStore = defineStore('economy', () => {
       const { error } = await supabase
         .from('users')
         .update({
-          koin_balance: koin.value,
+          koin: koin.value,
           total_koin_earned: totalKoinEarned.value,
           updated_at: new Date().toISOString()
         })
@@ -146,7 +142,7 @@ export const useEconomyStore = defineStore('economy', () => {
       const { error } = await supabase
         .from('users')
         .update({
-          diamond_balance: diamond.value,
+          diamond: diamond.value,
           total_diamond_purchased: totalDiamondPurchased.value,
           updated_at: new Date().toISOString()
         })
@@ -182,7 +178,7 @@ export const useEconomyStore = defineStore('economy', () => {
       const { error } = await supabase
         .from('users')
         .update({
-          koin_balance: koin.value,
+          koin: koin.value,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId.value)
@@ -216,7 +212,7 @@ export const useEconomyStore = defineStore('economy', () => {
       const { error } = await supabase
         .from('users')
         .update({
-          diamond_balance: diamond.value,
+          diamond: diamond.value,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId.value)
