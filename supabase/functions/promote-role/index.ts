@@ -10,7 +10,6 @@ const corsHeaders = {
 const VALID_ROLES = ["owner", "admin", "moderator", "user"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
-// Role hierarchy: only promote to a level <= your own level
 const ROLE_LEVELS: Record<Role, number> = {
   owner: 4,
   admin: 3,
@@ -18,8 +17,16 @@ const ROLE_LEVELS: Record<Role, number> = {
   user: 1,
 };
 
-// First-time owner bootstrap secret
-const BOOTSTRAP_SECRET = Deno.env.get("BOOTSTRAP_SECRET") || "";
+const supabaseUrl = () => Deno.env.get("SUPABASE_URL")!;
+const anonKey = () => Deno.env.get("SUPABASE_ANON_KEY")!;
+const serviceKey = () => Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+function serviceHeaders() {
+  return {
+    apikey: anonKey(),
+    Authorization: `Bearer ${serviceKey()}`,
+  };
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -32,21 +39,15 @@ Deno.serve(async (req: Request) => {
       return errorResponse("Missing authorization header", 401);
     }
 
-    // Verify JWT token
     const token = authHeader.replace("Bearer ", "");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Get the caller's user info from the token
-    const userResponse = await fetch(
-      `${supabaseUrl}/auth/v1/user`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: supabaseAnonKey,
-        },
-      }
-    );
+    // Verify JWT token via Supabase Auth
+    const userResponse = await fetch(`${supabaseUrl()}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey(),
+      },
+    });
 
     if (!userResponse.ok) {
       return errorResponse("Invalid token", 401);
@@ -63,69 +64,79 @@ Deno.serve(async (req: Request) => {
       bootstrapSecret?: string;
     };
 
-    // Validate inputs
     if (!targetUserId || !newRole) {
       return errorResponse("Missing targetUserId or newRole");
     }
 
     if (!VALID_ROLES.includes(newRole as Role)) {
-      return errorResponse(`Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`);
+      return errorResponse(
+        `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`
+      );
     }
 
     const targetRole = newRole as Role;
 
     // === BOOTSTRAP MODE ===
-    // If no owners exist yet, allow first promotion using a bootstrap secret
     if (bootstrapSecret) {
-      if (bootstrapSecret !== BOOTSTRAP_SECRET) {
+      // Read bootstrap secret from system_config table (service role bypasses RLS)
+      const configResponse = await fetch(
+        `${supabaseUrl()}/rest/v1/system_config?key=eq.bootstrap_secret&select=value`,
+        {
+          headers: serviceHeaders(),
+        }
+      );
+
+      if (!configResponse.ok) {
+        return errorResponse("Failed to read bootstrap config", 500);
+      }
+
+      const configData = await configResponse.json();
+      const storedSecret =
+        Array.isArray(configData) && configData.length > 0
+          ? configData[0].value
+          : null;
+
+      if (!storedSecret) {
+        return errorResponse(
+          "Bootstrap not configured. No bootstrap_secret found in system_config.",
+          403
+        );
+      }
+
+      if (bootstrapSecret !== storedSecret) {
         return errorResponse("Invalid bootstrap secret", 403);
       }
-      if (!BOOTSTRAP_SECRET) {
-        return errorResponse("Bootstrap not configured. Set BOOTSTRAP_SECRET env var.", 403);
-      }
+
       if (targetRole !== "owner") {
         return errorResponse("Bootstrap can only create the first owner", 403);
       }
 
       // Check if any owner already exists
       const ownersResponse = await fetch(
-        `${supabaseUrl}/rest/v1/users?id=select&id=eq.owner_count&role=eq.owner&select=id`,
+        `${supabaseUrl()}/rest/v1/users?role=eq.owner&select=id`,
         {
-          headers: {
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
+          headers: serviceHeaders(),
         }
       );
 
-      // Actually query properly
-      const countResponse = await fetch(
-        `${supabaseUrl}/rest/v1/users?role=eq.owner&select=id`,
-        {
-          headers: {
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            Prefer: "count=exact",
-          },
-        }
-      );
-
-      if (countResponse.ok) {
-        const owners = await countResponse.json();
+      if (ownersResponse.ok) {
+        const owners = await ownersResponse.json();
         if (Array.isArray(owners) && owners.length > 0) {
-          return errorResponse("Owner already exists. Use normal promotion flow.", 403);
+          return errorResponse(
+            "Owner already exists. Use normal promotion flow.",
+            403
+          );
         }
       }
 
       // Promote using service role key
       const updateResponse = await fetch(
-        `${supabaseUrl}/rest/v1/users?id=eq.${targetUserId}`,
+        `${supabaseUrl()}/rest/v1/users?id=eq.${targetUserId}`,
         {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            ...serviceHeaders(),
           },
           body: JSON.stringify({ role: "owner" }),
         }
@@ -133,27 +144,34 @@ Deno.serve(async (req: Request) => {
 
       if (!updateResponse.ok) {
         const err = await updateResponse.json();
-        return errorResponse(`Failed to promote user: ${JSON.stringify(err)}`, 500);
+        return errorResponse(
+          `Failed to promote user: ${JSON.stringify(err)}`,
+          500
+        );
       }
 
+      // Delete bootstrap secret after successful use (one-time only)
+      await fetch(
+        `${supabaseUrl()}/rest/v1/system_config?key=eq.bootstrap_secret`,
+        {
+          method: "DELETE",
+          headers: serviceHeaders(),
+        }
+      );
+
       return successResponse({
-        message: "Bootstrap owner created successfully",
+        message: "Bootstrap owner created successfully. Bootstrap secret has been consumed.",
         userId: targetUserId,
         role: "owner",
       });
     }
 
     // === NORMAL PROMOTION MODE ===
-    // Caller must be authenticated and have sufficient role
-
-    // Get caller's current role from users table
+    // Get caller's current role
     const callerProfileResponse = await fetch(
-      `${supabaseUrl}/rest/v1/users?id=eq.${callerId}&select=role`,
+      `${supabaseUrl()}/rest/v1/users?id=eq.${callerId}&select=role`,
       {
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
+        headers: serviceHeaders(),
       }
     );
 
@@ -169,12 +187,13 @@ Deno.serve(async (req: Request) => {
     const callerRole = callerProfiles[0].role as Role;
     const callerLevel = ROLE_LEVELS[callerRole];
 
-    // Only admin+ can promote
     if (callerLevel < ROLE_LEVELS.admin) {
-      return errorResponse("Insufficient permissions. Admin role or higher required.", 403);
+      return errorResponse(
+        "Insufficient permissions. Admin role or higher required.",
+        403
+      );
     }
 
-    // Cannot promote to a level higher than your own
     if (ROLE_LEVELS[targetRole] > callerLevel) {
       return errorResponse(
         `Cannot promote to ${targetRole}. Your role (${callerRole}) is not high enough.`,
@@ -182,19 +201,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Cannot promote yourself
     if (callerId === targetUserId) {
       return errorResponse("Cannot change your own role", 403);
     }
 
     // Get target user's current role
     const targetProfileResponse = await fetch(
-      `${supabaseUrl}/rest/v1/users?id=eq.${targetUserId}&select=role,email,display_name`,
+      `${supabaseUrl()}/rest/v1/users?id=eq.${targetUserId}&select=role`,
       {
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
+        headers: serviceHeaders(),
       }
     );
 
@@ -209,7 +224,6 @@ Deno.serve(async (req: Request) => {
 
     const targetCurrentRole = targetProfiles[0].role as Role;
 
-    // Cannot demote someone at or above your level
     if (ROLE_LEVELS[targetCurrentRole] >= callerLevel) {
       return errorResponse(
         `Cannot change role of ${targetCurrentRole}. They are at or above your level.`,
@@ -217,15 +231,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Perform the role update using service role key
+    // Perform the role update
     const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/users?id=eq.${targetUserId}`,
+      `${supabaseUrl()}/rest/v1/users?id=eq.${targetUserId}`,
       {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          ...serviceHeaders(),
         },
         body: JSON.stringify({ role: targetRole }),
       }
